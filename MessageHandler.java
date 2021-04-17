@@ -1,4 +1,5 @@
 import java.net.Socket;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
@@ -29,6 +30,10 @@ public class MessageHandler implements Runnable {
             String message = input.readUTF();
             if (message.equals("register")) {
                 handleRegister();
+            } else if (message.equals("login")) {
+                handleLogin();
+            } else if (message.equals("logout")) {
+                handleLogout();
             }
 
             // Close socket and object streams
@@ -60,6 +65,61 @@ public class MessageHandler implements Runnable {
             ioe.printStackTrace();
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void handleLogin() {
+        try {
+            // Send true
+            output.writeBoolean(true);
+            output.flush();
+
+            // Wait for username and password
+            ConcurrentHashMap<String, String> credentials = (ConcurrentHashMap<String, String>) input.readObject();
+            int tokenId = tracker.loginPeer(credentials.get("username"), 
+                                                credentials.get("password"), 
+                                                socket);
+
+            // Respond
+            output.writeInt(tokenId);
+            output.flush();
+
+            // Wait for inform
+            List<String> files = (List<String>) input.readObject();
+            tracker.addPeerFiles(credentials.get("username"), files);
+
+            
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void handleLogout() {
+        try {
+            // Send true
+            output.writeBoolean(true);
+            output.flush();
+
+            // Wait for token_id
+            int token = input.readInt();
+            for (int t : tracker.getTokens()) {
+                if (token == t) {
+                    // Logout the peer and send true
+                    tracker.logoutPeer(token);
+                    output.writeBoolean(true);
+                    output.flush();
+                    return;
+                }
+            }
+
+            // Send false(token_id doesn't match any logged in peer)
+            output.writeBoolean(false);
+            output.flush();
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
         }
     }
 }
