@@ -123,9 +123,9 @@ public class Peer {
             output.writeObject(files);
             output.flush();
 
-            output.close();
-            input.close();
-            socket.close();
+            // output.close();
+            // input.close();
+            // socket.close();
             return true;
 
         } catch (IOException ioe) {
@@ -136,11 +136,6 @@ public class Peer {
 
     private boolean logout() {
         try {
-            // Connect to the tracker
-            socket = new Socket("127.0.0.1", 55217);
-            output = new ObjectOutputStream(socket.getOutputStream());
-            input = new ObjectInputStream(socket.getInputStream());
-
             // Send "logout"
             output.writeUTF("logout");
             output.flush();

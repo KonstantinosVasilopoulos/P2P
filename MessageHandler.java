@@ -25,23 +25,26 @@ public class MessageHandler implements Runnable {
     }
 
     public void run() {
-        try {
-            // Wait for message
-            String message = input.readUTF();
-            if (message.equals("register")) {
-                handleRegister();
-            } else if (message.equals("login")) {
-                handleLogin();
-            } else if (message.equals("logout")) {
-                handleLogout();
-            }
+        String message;
+        while (true) {
+            try {
+                if (socket.isClosed()) break;
+                if (input.available() == 0) continue;
+                
+                // Wait for message
+                message = input.readUTF();
+                if (message.equals("register")) {
+                    handleRegister();
+                } else if (message.equals("login")) {
+                    handleLogin();
+                } else if (message.equals("logout")) {
+                    System.out.println("logout");
+                    handleLogout();
+                }
 
-            // Close socket and object streams
-            output.close();
-            input.close();
-            socket.close();
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
+            } catch (IOException ioe) {
+                ioe.printStackTrace();
+            }
         }
     }
 
@@ -52,7 +55,9 @@ public class MessageHandler implements Runnable {
             output.flush();
 
             // Wait for credentials
-            ConcurrentHashMap<String, String> credentials = (ConcurrentHashMap<String, String>) input.readObject();
+            Object response = input.readObject();
+            @SuppressWarnings("unchecked")
+            ConcurrentHashMap<String, String> credentials = (ConcurrentHashMap<String, String>) response;
 
             // Create an account and send success message
             boolean success = tracker.addSavedPeer(credentials.get("username"), credentials.get("password"));
@@ -75,7 +80,9 @@ public class MessageHandler implements Runnable {
             output.flush();
 
             // Wait for username and password
-            ConcurrentHashMap<String, String> credentials = (ConcurrentHashMap<String, String>) input.readObject();
+            Object response = input.readObject();
+            @SuppressWarnings("unchecked")
+            ConcurrentHashMap<String, String> credentials = (ConcurrentHashMap<String, String>) response;
             int tokenId = tracker.loginPeer(credentials.get("username"), 
                                                 credentials.get("password"), 
                                                 socket);
@@ -85,7 +92,9 @@ public class MessageHandler implements Runnable {
             output.flush();
 
             // Wait for inform
-            List<String> files = (List<String>) input.readObject();
+            response = input.readObject();
+            @SuppressWarnings("unchecked")
+            List<String> files = (List<String>) response;
             tracker.addPeerFiles(credentials.get("username"), files);
 
             
@@ -110,6 +119,7 @@ public class MessageHandler implements Runnable {
                     tracker.logoutPeer(token);
                     output.writeBoolean(true);
                     output.flush();
+                    System.out.println("Tracker: Logged peer " + token + " out.");
                     return;
                 }
             }
