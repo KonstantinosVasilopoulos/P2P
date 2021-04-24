@@ -29,10 +29,18 @@ public class Peer {
     }
 
     // TODO: Add a String planFilename to load commands
-    private void start() {
+    public void start() {
         boolean success = register();
         if (success)
-            success = login();
+            login();
+            notifyFiles();
+            try {
+                new File("shared_directory/" + credentials.get("username") + "/file3.txt").createNewFile();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.exit(0);
+            }
+            success = notifyFiles();
             if (success)
                 logout();
     }
@@ -106,13 +114,13 @@ public class Peer {
             }
 
             // Wait for response
-            int tokeId = input.readInt();
-            if (tokeId == 0) {
+            int tokenId = input.readInt();
+            if (tokenId == 0) {
                 System.out.println("Peer: Unable to login.");
                 return false;
             } else {
-                System.out.println("Peer " + tokeId +": Logged in.");
-                credentials.put("token_id", String.valueOf(tokeId));
+                System.out.println("Peer " + tokenId +": Logged in.");
+                credentials.put("token_id", String.valueOf(tokenId));
             }
 
             // Send inform
@@ -123,10 +131,9 @@ public class Peer {
             output.writeObject(files);
             output.flush();
 
-            // output.close();
-            // input.close();
-            // socket.close();
-            return true;
+            // Wait for true
+            response = input.readBoolean();
+            return response;
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
@@ -161,6 +168,38 @@ public class Peer {
             output.close();
             input.close();
             socket.close();
+            return response;
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return false;
+        }
+    }
+
+    private boolean notifyFiles() {
+        try {
+            // Send "notify"
+            output.writeUTF("notify");
+            output.flush();
+
+            // Send token_id
+            output.writeUTF(credentials.get("token_id"));
+            // output.flush();
+
+            // Send an array with availables files
+            String[] files = new File("shared_directory/" + credentials.get("username") + "/").list();
+            for (int i = 0; i < files.length; i++) {
+                output.writeUTF(files[i]);
+            }
+            output.flush();
+
+            // Wait for true
+            boolean response = input.readBoolean();
+            if (response)
+                System.out.println("Peer " + credentials.get("token_id") + ": Successfully notified tracker.");
+            else
+                System.out.println("Peer " + credentials.get("token_id") + ": Failed to notify tracker.");
+
             return response;
 
         } catch (IOException ioe) {

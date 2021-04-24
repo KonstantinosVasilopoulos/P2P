@@ -101,6 +101,15 @@ public class Tracker {
         }
     }
 
+    // Given a token_id, return the username associated with that user
+    public String getUsername(String token) {
+        for (LoggedInPeer user : loggedInPeers) {
+            if (String.valueOf(user.getTokenId()).equals(token))
+                return user.getUser().getUsername();
+        }
+        return null;
+    }
+
     private int getNewTokenId() {
         int token = 0;
         Random rand = new Random();
@@ -131,6 +140,19 @@ public class Tracker {
 
     public List<LoggedInPeer> getLoggedInPeers() {
         return loggedInPeers;
+    }
+
+    public ConcurrentHashMap<String, List<String>> getPeerFiles() {
+        return new ConcurrentHashMap<>(peerFiles);
+    }
+
+    public void setPeerFiles(ConcurrentHashMap<String, List<String>> peerFiles) {
+        this.peerFiles = peerFiles;
+        System.out.println(peerFiles);
+    }
+
+    public void addPeerFile(String token, String filename) {
+        peerFiles.get(token).add(filename);
     }
 
     public static void main(String[] args) {
