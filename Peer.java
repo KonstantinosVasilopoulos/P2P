@@ -1,29 +1,40 @@
-import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.ConnectException;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
 import java.io.File;
+import java.lang.Thread;
 
 public class Peer {
-    private ServerSocket server;
     private Socket socket;
     private ObjectOutputStream output;
     private ObjectInputStream input;
+    private PeerInputHandler inputHandler;
+
+    private final int PORT;
 
     // Peer username and password
     private ConcurrentHashMap<String, String> credentials;
 
-    public Peer(String username, String password) {
+    public Peer(String username, String password, int port) {
         credentials = new ConcurrentHashMap<>();
         credentials.put("username", username);
         credentials.put("password", password);
+        PORT = port;
 
         // Create a shared_directory if one doesn't exist
         new File("shared_directory/" + username + "/").mkdirs();
+
+        // Start the input handler, in order to be able to receive checkActive
+        // and download requests.
+        inputHandler = new PeerInputHandler(this);
+        Thread inputHandlerThread = new Thread(inputHandler);
+        inputHandlerThread.start();
         
         start();
     }
@@ -33,19 +44,26 @@ public class Peer {
         boolean success = register();
         if (success)
             login();
-            notifyFiles();
             try {
-                new File("shared_directory/" + credentials.get("username") + "/file3.txt").createNewFile();
+                if (credentials.get("username").equals("testPeer"))
+                    new File("shared_directory/" + credentials.get("username") + "/file1.txt").createNewFile();
+                // new File("shared_directory/" + credentials.get("username") + "/file2.txt").createNewFile();
+                // new File("shared_directory/" + credentials.get("username") + "/file3.txt").createNewFile();
             } catch (IOException e) {
                 e.printStackTrace();
                 System.exit(0);
             }
             success = notifyFiles();
-            if (success)
-                logout();
+            List<String> allFiles = list();
+            if (!credentials.get("username").equals("testPeer")) {
+                HashMap<String, List<String>> fileDetails = details("file1.txt");
+                System.out.println(fileDetails);
+            }
+            // if (success)
+            //     logout();
     }
 
-    private boolean register() {
+    public boolean register() {
         try {
             // Connect to the tracker
             socket = new Socket("127.0.0.1", 55217);
@@ -90,7 +108,7 @@ public class Peer {
         }
     }
 
-    private boolean login() {
+    public boolean login() {
         try {
             // Connect to the tracker
             socket = new Socket("127.0.0.1", 55217);
@@ -104,6 +122,10 @@ public class Peer {
             // Wait for true
             boolean response = input.readBoolean();
             if (response) {
+                // Send port
+                output.writeInt(PORT);
+                output.flush();
+
                 // Send username and password
                 output.writeObject(credentials);
                 output.flush();
@@ -141,7 +163,7 @@ public class Peer {
         }
     }
 
-    private boolean logout() {
+    public boolean logout() {
         try {
             // Send "logout"
             output.writeUTF("logout");
@@ -176,7 +198,7 @@ public class Peer {
         }
     }
 
-    private boolean notifyFiles() {
+    public boolean notifyFiles() {
         try {
             // Send "notify"
             output.writeUTF("notify");
@@ -184,7 +206,6 @@ public class Peer {
 
             // Send token_id
             output.writeUTF(credentials.get("token_id"));
-            // output.flush();
 
             // Send an array with availables files
             String[] files = new File("shared_directory/" + credentials.get("username") + "/").list();
@@ -208,7 +229,96 @@ public class Peer {
         }
     }
 
+    public List<String> list() {
+        try {
+            // Send list
+            output.writeUTF("list");
+            output.flush();
+
+            // Wait for the list containing all available files
+            Object response = input.readObject();
+            @SuppressWarnings("unchecked")
+            List<String> allFiles = (List<String>) response;
+            System.out.println("Peer " + credentials.get("token_id") + ": Received file list from tracker.");
+            return allFiles;
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return null;
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public HashMap<String, List<String>> details(String filename) {
+        try {
+            // Send "details" and the filename
+            output.writeUTF("details");
+            output.writeUTF(filename);
+            output.flush();
+
+            // Response about the existance of the requested file
+            boolean exists = input.readBoolean();
+            if (!exists) {
+                System.out.println("Peer " + credentials.get("token_id") + ": File " + filename + " doesn't exist.");
+                return null;
+            }
+
+            // Wait for the list with the requested file's details
+            Object response = input.readObject();
+            @SuppressWarnings("unchecked")
+            HashMap<String, List<String>> fileDetails = (HashMap<String, List<String>>) response;
+            return fileDetails;
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return null;
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public boolean checkActive(String address, int port) {
+        try {
+            // Connect with the otherPeer and open IO streams
+            Socket otherPeer = new Socket(address, port);
+            ObjectOutputStream otherOutput = new ObjectOutputStream(otherPeer.getOutputStream());
+            ObjectInputStream otherInput = new ObjectInputStream(otherPeer.getInputStream());
+
+            // Send "checkActive"
+            otherOutput.writeUTF("checkActive");
+            otherOutput.flush();
+
+            // Wait for response
+            boolean response = otherInput.readBoolean();
+
+            // Close the connection
+            otherOutput.close();
+            otherInput.close();
+            otherPeer.close();
+
+            if (response) {
+                System.out.println("Peer: Peer at " + address + ":" + String.valueOf(port) + " is active.");
+                return true;
+            }
+            return false;
+
+        } catch(ConnectException e) {
+            System.out.println("Peer: Peer at " + address + ":" + String.valueOf(port) + " is not active.");
+            return false;
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return false;
+        }
+    }
+
+    public int getPort() {
+        return PORT;
+    }
+
     public static void main(String[] args) {
-        new Peer(args[0], args[1]);
+        new Peer(args[0], args[1], Integer.parseInt(args[2]));
     }
 }

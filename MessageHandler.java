@@ -1,6 +1,8 @@
 import java.net.Socket;
+import java.net.ConnectException;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
@@ -51,8 +53,16 @@ public class MessageHandler implements Runnable {
                         handleNotify();
                         break;
 
+                    case "list":
+                        replyList();
+                        break;
+
+                    case "details":
+                        replyDetails();
+                        break;
+
                     default:
-                        System.out.println("No such function: " + message +".");
+                        System.out.println("Tracker: No such function: " + message +".");
                 }
 
             } catch (IOException ioe) {
@@ -92,13 +102,16 @@ public class MessageHandler implements Runnable {
             output.writeBoolean(true);
             output.flush();
 
+            // Wait for peer's port number
+            int port = input.readInt();
+
             // Wait for username and password
             Object response = input.readObject();
             @SuppressWarnings("unchecked")
             ConcurrentHashMap<String, String> credentials = (ConcurrentHashMap<String, String>) response;
             int tokenId = tracker.loginPeer(credentials.get("username"), 
                                             credentials.get("password"), 
-                                            socket);
+                                            port, socket, output, input);
 
             // Respond
             output.writeInt(tokenId);
@@ -182,6 +195,105 @@ public class MessageHandler implements Runnable {
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
+        }
+    }
+
+    private void replyList() {
+        try {
+            // Send a list containing all available files
+            output.writeObject(tracker.getAllFiles());
+            output.flush();
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();   
+        }
+    }
+
+    private void replyDetails() {
+        try {
+            // Get the filename
+            String filename = input.readUTF();
+
+            // Find whether the file exists
+            boolean isActive, found = false;
+            HashMap<String, List<String>> files = new HashMap<>(tracker.getPeerFiles());
+            HashMap<String, List<String>> requestedFileOwners = new HashMap<>();
+            for (String username : files.keySet()) {
+                if (files.get(username).contains(filename)) {
+                    // Make sure the peer is logged in
+                    isActive = false;
+                    for (LoggedInPeer peer : tracker.getLoggedInPeers()) {
+                        if (peer.getUser().getUsername().equals(username)) {
+                            // Send checkActive to peer
+                            isActive = checkActive(peer);
+                            
+                            // Amend the requestedFileOwners hashmap to include the active peer
+                            if (isActive) {
+                                found = true;
+                                requestedFileOwners.putIfAbsent(username, new ArrayList<>());
+                                requestedFileOwners.get(username).add(peer.getIpAddress());
+                                requestedFileOwners.get(username).add(String.valueOf(peer.getPort()));
+                                requestedFileOwners.get(username).add(peer.getUser().getUsername());
+                                requestedFileOwners.get(username).add(String.valueOf(peer.getUser().getCountFailures()));
+                                requestedFileOwners.get(username).add(String.valueOf(peer.getUser().getCountFailures()));
+                            } else {
+                                tracker.logoutPeer(peer.getTokenId());
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Notify the peer about the status of the requested file
+            output.writeBoolean(found);
+            output.flush();
+
+            // Send the information about the requested files and it's peers
+            if (found) {
+                output.writeObject(requestedFileOwners);
+                output.flush();
+                System.out.println("Tracker: Sent details for file " + filename + ".");
+            } else {
+                System.out.println("Tracker: No such file: " + filename + ".");
+            }
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+    }
+
+    private boolean checkActive(LoggedInPeer otherPeer) {
+        try {
+            // Connect with the otherPeer
+            Socket otherSocket = new Socket(otherPeer.getIpAddress(), otherPeer.getPort());
+            ObjectOutputStream otherOutput = new ObjectOutputStream(otherSocket.getOutputStream());
+            ObjectInputStream otherInput = new ObjectInputStream(otherSocket.getInputStream());
+
+            // Send "checkActive"
+            otherOutput.writeUTF("checkActive");
+            otherOutput.flush();
+
+            // Wait for response
+            boolean response = otherInput.readBoolean();
+
+            // Close the connection
+            otherOutput.close();
+            otherInput.close();
+            otherSocket.close();
+
+            if (response) {
+                System.out.println("Tracker: Peer at " + otherPeer.getIpAddress() + ":" + String.valueOf(otherPeer.getPort()) + " is active.");
+                return true;
+            }
+            return false;
+
+        } catch (ConnectException e) {
+            System.out.println("Tracker: Peer at " + otherPeer.getIpAddress() + ":" + String.valueOf(otherPeer.getPort()) + " is not active.");
+            return false;
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return false;
         }
     }
 }

@@ -5,7 +5,10 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 import java.util.Random;
+import java.io.ObjectOutputStream;
+import java.io.ObjectInputStream;
 import java.io.IOException;
 
 public class Tracker {
@@ -63,7 +66,8 @@ public class Tracker {
     }
 
     // Return the token_id if succefull. Otherwise, return 0
-    public int loginPeer(String username, String password, Socket socket) {
+    public int loginPeer(String username, String password, int port, Socket socket,
+                        ObjectOutputStream output, ObjectInputStream input) {
         // Make sure the peer is registered
         boolean found = false;
         SavedPeer user = null;
@@ -80,10 +84,7 @@ public class Tracker {
         // Create LoggedInPeer instance
         int token = getNewTokenId();
         tokens.add(token);
-        loggedInPeers.add(new LoggedInPeer(token, 
-                    socket.getInetAddress().getHostAddress(), 
-                    socket.getPort(), 
-                    user));
+        loggedInPeers.add(new LoggedInPeer(token, port, socket, output, input, user));
         return token;
     }
 
@@ -108,6 +109,16 @@ public class Tracker {
                 return user.getUser().getUsername();
         }
         return null;
+    }
+
+    // Return a list containing all files available
+    public List<String> getAllFiles() {
+        List<String> allFiles = new ArrayList<>();
+        for (List<String> fileList : peerFiles.values())
+            allFiles.addAll(fileList);
+        
+        // Return distict files
+        return allFiles.stream().distinct().collect(Collectors.toList());
     }
 
     private int getNewTokenId() {
@@ -148,7 +159,6 @@ public class Tracker {
 
     public void setPeerFiles(ConcurrentHashMap<String, List<String>> peerFiles) {
         this.peerFiles = peerFiles;
-        System.out.println(peerFiles);
     }
 
     public void addPeerFile(String token, String filename) {

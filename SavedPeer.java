@@ -31,6 +31,10 @@ public class SavedPeer {
         return countDownloads;
     }
 
+    public int getCountFailures() {
+        return countFailures;
+    }
+
     public void incrementCountDownloads() {
         countDownloads++;
     }
