@@ -61,6 +61,10 @@ public class MessageHandler implements Runnable {
                         replyDetails();
                         break;
 
+                    case "notifyDownload":
+                        handleNotifyDownload();
+                        break;
+
                     default:
                         System.out.println("Tracker: No such function: " + message +".");
                 }
@@ -112,6 +116,7 @@ public class MessageHandler implements Runnable {
             int tokenId = tracker.loginPeer(credentials.get("username"), 
                                             credentials.get("password"), 
                                             port, socket, output, input);
+            if (tokenId == 0) return;
 
             // Respond
             output.writeInt(tokenId);
@@ -176,10 +181,13 @@ public class MessageHandler implements Runnable {
             String filename;
             while (input.available() > 0 || !received) {
                 filename = input.readUTF();
+                received = true;
+
+                // filename will be "empty" if the peer has not files
+                if (filename.equals("empty")) break;
+
                 if (!peerFiles.get(username).contains(filename))
                     peerFiles.get(username).add(filename);
-                   
-                received = true;
             }
 
             // Send success message
@@ -294,6 +302,32 @@ public class MessageHandler implements Runnable {
         } catch (IOException ioe) {
             ioe.printStackTrace();
             return false;
+        }
+    }
+
+    private void handleNotifyDownload() {
+        try {
+            // Get the success and the username
+            boolean success = input.readBoolean();
+            String username = input.readUTF();
+
+            // Update the saved peer
+            for (SavedPeer peer : tracker.getSavedPeers()) {
+                if (peer.getUsername().equals(username)) {
+                    if (success) {
+                        peer.incrementCountDownloads();
+                        System.out.println("Tracker: Got notified for a download success for peer " + username + ".");
+                    } else {
+                        peer.incrementCountFailures();
+                        System.out.println("Tracker: Got notified for a download failure for peer " + username + ".");
+                    }
+                    
+                    break;
+                }
+            }
+            
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
         }
     }
 }

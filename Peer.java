@@ -3,12 +3,16 @@ import java.net.ConnectException;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.BufferedOutputStream;
 import java.lang.Thread;
+import java.lang.Math;
 
 public class Peer {
     private Socket socket;
@@ -41,26 +45,15 @@ public class Peer {
 
     // TODO: Add a String planFilename to load commands
     public void start() {
+        // ADD THE FUNCTIONS YOU WANT THE PEER TO EXECUTE HERE!
         boolean success = register();
         if (success)
             login();
-            try {
-                if (credentials.get("username").equals("testPeer"))
-                    new File("shared_directory/" + credentials.get("username") + "/file1.txt").createNewFile();
-                // new File("shared_directory/" + credentials.get("username") + "/file2.txt").createNewFile();
-                // new File("shared_directory/" + credentials.get("username") + "/file3.txt").createNewFile();
-            } catch (IOException e) {
-                e.printStackTrace();
-                System.exit(0);
-            }
-            success = notifyFiles();
+        if (credentials.get("username").equals("testPeer")) {
             List<String> allFiles = list();
-            if (!credentials.get("username").equals("testPeer")) {
-                HashMap<String, List<String>> fileDetails = details("file1.txt");
-                System.out.println(fileDetails);
-            }
-            // if (success)
-            //     logout();
+            HashMap<String, List<String>> fileDetails = details("file2.txt");
+            simpleDownload("file2.txt", fileDetails);
+        }
     }
 
     public boolean register() {
@@ -209,8 +202,13 @@ public class Peer {
 
             // Send an array with availables files
             String[] files = new File("shared_directory/" + credentials.get("username") + "/").list();
-            for (int i = 0; i < files.length; i++) {
-                output.writeUTF(files[i]);
+            if (files.length == 0) {
+                // Send "empty" if the peer has not files
+                output.writeUTF("empty");
+            } else {
+                for (int i = 0; i < files.length; i++) {
+                    output.writeUTF(files[i]);
+                }
             }
             output.flush();
 
@@ -269,6 +267,7 @@ public class Peer {
             Object response = input.readObject();
             @SuppressWarnings("unchecked")
             HashMap<String, List<String>> fileDetails = (HashMap<String, List<String>>) response;
+            System.out.println("Peer " + credentials.get("token_id") + ": Received details for file " + filename + ".");
             return fileDetails;
 
         } catch (IOException ioe) {
@@ -286,7 +285,6 @@ public class Peer {
             Socket otherPeer = new Socket(address, port);
             ObjectOutputStream otherOutput = new ObjectOutputStream(otherPeer.getOutputStream());
             ObjectInputStream otherInput = new ObjectInputStream(otherPeer.getInputStream());
-
             // Send "checkActive"
             otherOutput.writeUTF("checkActive");
             otherOutput.flush();
@@ -300,7 +298,7 @@ public class Peer {
             otherPeer.close();
 
             if (response) {
-                System.out.println("Peer: Peer at " + address + ":" + String.valueOf(port) + " is active.");
+                System.out.println("Peer " + credentials.get("token_id") + ": Peer at " + address + ":" + String.valueOf(port) + " is active.");
                 return true;
             }
             return false;
@@ -312,6 +310,124 @@ public class Peer {
             ioe.printStackTrace();
             return false;
         }
+    }
+
+    public void simpleDownload(String filename, HashMap<String, List<String>> fileDetails) {
+        // Exit if no the requested file isn't owned by any peers
+        if (fileDetails.isEmpty()) return;
+
+        // Find the best peer
+        List<String> peerInfo;
+        List<Double> scores = new ArrayList<>();
+        double score;
+        long start, end, responseTime;
+        boolean isActive, found = false;
+        for (String peer : fileDetails.keySet()) {
+            peerInfo = fileDetails.get(peer);
+
+            // Check peer state and calculate time
+            start = System.currentTimeMillis();
+            isActive = checkActive(peerInfo.get(0), Integer.parseInt(peerInfo.get(1)));
+            if (isActive) {
+                end = System.currentTimeMillis();
+                found = true;
+                responseTime = end - start;
+
+                // Calculate the score
+                score = responseTime * Math.pow(0.9, Double.parseDouble(peerInfo.get(3))) * 
+                        Math.pow(1.2, Double.parseDouble(peerInfo.get(4)));
+                peerInfo.add(String.valueOf(score));
+                scores.add(score);
+            }
+        }
+
+        // Sort the scores in ascending order
+        Collections.sort(scores);
+        
+        boolean exists, success = false;
+        int bytesRead;
+        byte[] bytes = new byte[4096];
+        if (found) {
+            Socket otherPeer;
+            ObjectOutputStream otherOutput;
+            ObjectInputStream otherInput;
+
+            for (double s : scores) {
+                // Get the rest of data using the score
+                for (String peer : fileDetails.keySet()) {
+                    peerInfo = fileDetails.get(peer);
+                    if (peerInfo.size() == 5) continue;
+
+                    if (s == Double.parseDouble(peerInfo.get(5))) {
+                        try {
+                            // Connect with the other peer
+                            otherPeer = new Socket(peerInfo.get(0), Integer.parseInt(peerInfo.get(1)));
+                            otherOutput = new ObjectOutputStream(otherPeer.getOutputStream());
+                            otherInput = new ObjectInputStream(otherPeer.getInputStream());
+
+                            // Send "simpleDownload"
+                            otherOutput.writeUTF("simpleDownload");
+                            otherOutput.flush();
+
+                            // Send the filename
+                            otherOutput.writeUTF(filename);
+                            otherOutput.flush();
+
+                            // Wait to learn whether the peer has the file
+                            exists = otherInput.readBoolean();
+                            if (exists) {
+                                // Receive the file
+                                FileOutputStream fos = new FileOutputStream("shared_directory/" + credentials.get("username") + "/" + filename);
+                                BufferedOutputStream bos = new BufferedOutputStream(fos);
+                                while ((bytesRead = otherInput.read(bytes, 0, bytes.length)) > 0)
+                                    bos.write(bytes, 0, bytesRead);
+                                
+                                bos.close();
+                                System.out.println("Peer " + credentials.get("token_id") +": Received file " + filename + " from peer " + peerInfo.get(2) + ".");
+                            }
+
+                            // Notify the tracker about the new file
+                            notifyFiles();
+
+                            // Notify the tracker about a successful download
+                            notifyDownload(true, peerInfo.get(2));
+
+                            success = true;
+                            break;
+                            
+                        } catch (IOException ioe) {
+                            ioe.printStackTrace();
+
+                            // Notify the tracker about a download failure
+                            notifyDownload(false, peerInfo.get(2));
+                        }
+                    }
+                }
+                if (success) break;
+            }
+        } else {
+            System.out.println("Peer " + credentials.get("token_id") + ": Failed to download " + filename + ".");
+        }
+    }
+
+    public void notifyDownload(boolean success, String username) {
+        try {
+            // Send "notifyDownload", success and the username
+            output.writeUTF("notifyDownload");
+            output.flush();
+            output.writeBoolean(success);
+            output.writeUTF(username);
+            output.flush();
+            System.out.println("Peer " + credentials.get("token_id") + ": Notified tracker for download status.");
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+    }
+
+    // Getters
+    public ConcurrentHashMap<String, String> getCredentials() {
+        return new ConcurrentHashMap<>(credentials);
     }
 
     public int getPort() {

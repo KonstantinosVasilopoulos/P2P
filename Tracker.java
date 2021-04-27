@@ -79,7 +79,9 @@ public class Tracker {
             }
         }
         
-        if (!found) return 0;
+        if (!found || !password.equals(user.getPassword())) {
+            return 0;
+        };
 
         // Create LoggedInPeer instance
         int token = getNewTokenId();

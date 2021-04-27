@@ -3,6 +3,9 @@ import java.net.Socket;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.BufferedInputStream;
 
 public class PeerInputHandler implements Runnable {
     private Peer peer;
@@ -30,19 +33,24 @@ public class PeerInputHandler implements Runnable {
                 input = new ObjectInputStream(socket.getInputStream());
 
                 // Wait for messages and categorize them
-                while (socket.isConnected()) {
-                    if (input.available() == 0) continue;
+                message = input.readUTF();
+                switch (message) {
+                    case "checkActive":
+                        replyCheckActive();
+                        break;
 
-                    message = input.readUTF();
-                    switch (message) {
-                        case "checkActive":
-                            replyCheckActive();
-                            break;
+                    case "simpleDownload":
+                        handleSimpleDownload();
+                        break;
 
-                        default:
-                            System.out.println("Peer: No such function: " + message + ".");
-                    }
+                    default:
+                        System.out.println("Peer: No such function: " + message + ".");
                 }
+
+                // Close socket and IO streams
+                output.close();
+                input.close();
+                socket.close();
             }
 
         } catch (IOException ioe) {
@@ -55,8 +63,50 @@ public class PeerInputHandler implements Runnable {
             // Send true
             output.writeBoolean(true);
             output.flush();
-            System.out.println("Peer: Active.");
+            System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Active.");
         
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+    }
+
+    private void handleSimpleDownload() {
+        try {
+            // Wait for the filename
+            String filename = input.readUTF();
+
+            // Check if the file exists
+            File requestedFile = new File("shared_directory/" + peer.getCredentials().get("username") + "/" + filename);
+            if (requestedFile.exists()) {
+                // Send true
+                output.writeBoolean(true);
+                output.flush();
+
+                // Check if the file is too large to be send
+                long fileLength = requestedFile.length();
+                if (fileLength > Integer.MAX_VALUE) {
+                    System.out.println("Peer " + peer.getCredentials().get("token_id") + ": File is too big.");
+
+                    // Send false
+                    output.writeBoolean(false);
+                    output.flush();
+                    return;
+                }
+                // Send the file
+                byte[] bytes = new byte[(int) fileLength];
+                BufferedInputStream bis = new BufferedInputStream(new FileInputStream(requestedFile));
+                bis.read(bytes, 0, bytes.length);
+                output.write(bytes, 0, bytes.length);
+                output.flush();
+                bis.close();
+                System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Sent file " + requestedFile.getName() + ".");
+
+            } else {
+                // Send false
+                output.writeBoolean(false);
+                output.flush();
+            }
+
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
