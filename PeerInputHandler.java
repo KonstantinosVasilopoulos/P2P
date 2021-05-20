@@ -76,7 +76,7 @@ public class PeerInputHandler implements Runnable {
             String filename = input.readUTF();
 
             // Check if the file exists
-            File requestedFile = new File("shared_directory/" + peer.getCredentials().get("username") + "/" + filename);
+            File requestedFile = new File(peer.getSharedDir() + "pieces/", filename);
             if (requestedFile.exists()) {
                 // Send true
                 output.writeBoolean(true);

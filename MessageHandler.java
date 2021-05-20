@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
+import java.lang.ClassNotFoundException;
 
 public class MessageHandler implements Runnable {
     private Socket socket;
@@ -125,7 +126,7 @@ public class MessageHandler implements Runnable {
             // Wait for inform
             response = input.readObject();
             @SuppressWarnings("unchecked")
-            List<String> files = (List<String>) response;
+            List<SavedFile> files = (ArrayList<SavedFile>) response;
             tracker.addPeerFiles(credentials.get("username"), files);
 
             // Send true
@@ -174,35 +175,21 @@ public class MessageHandler implements Runnable {
             String token = input.readUTF();
             String username = tracker.getUsername(token);
 
-            // Get filenames
-            ConcurrentHashMap<String, List<String>> peerFiles = tracker.getPeerFiles();
-            peerFiles.putIfAbsent(username, new ArrayList<String>());
-            boolean received = false;
-            String filename;
-            while (input.available() > 0 || !received) {
-                filename = input.readUTF();
-                received = true;
-
-                // filename will be "empty" if the peer has not files
-                if (filename.equals("empty")) break;
-
-                if (!peerFiles.get(username).contains(filename))
-                    peerFiles.get(username).add(filename);
-            }
+            // Get the peer's files
+            Object response = input.readObject();
+            @SuppressWarnings("unchecked")
+            List<SavedFile> files = (ArrayList<SavedFile>) response;
+            tracker.addPeerFiles(username, files);
 
             // Send success message
-            if (received) {
-                tracker.setPeerFiles(peerFiles);
-                System.out.println("Tracker: Got filenames from peer " + token + ".");
-            } else {
-                System.out.println("Tracker: Failed to receive files from peer " + token + ".");
-            }
-            
-            output.writeBoolean(received);
+            System.out.println("Tracker: Got filenames from peer " + token + ".");
+            output.writeBoolean(true);
             output.flush();
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
+        } catch (ClassNotFoundException cnfe) {
+            cnfe.printStackTrace();
         }
     }
 
@@ -224,30 +211,33 @@ public class MessageHandler implements Runnable {
 
             // Find whether the file exists
             boolean isActive, found = false;
-            HashMap<String, List<String>> files = new HashMap<>(tracker.getPeerFiles());
-            HashMap<String, List<String>> requestedFileOwners = new HashMap<>();
+            HashMap<String, List<SavedFile>> files = new HashMap<>(tracker.getPeerFiles());
+            HashMap<String, List<Object>> requestedFileOwners = new HashMap<>();
             for (String username : files.keySet()) {
-                if (files.get(username).contains(filename)) {
-                    // Make sure the peer is logged in
-                    isActive = false;
-                    for (LoggedInPeer peer : tracker.getLoggedInPeers()) {
-                        if (peer.getUser().getUsername().equals(username)) {
-                            // Send checkActive to peer
-                            isActive = checkActive(peer);
-                            
-                            // Amend the requestedFileOwners hashmap to include the active peer
-                            if (isActive) {
-                                found = true;
-                                requestedFileOwners.putIfAbsent(username, new ArrayList<>());
-                                requestedFileOwners.get(username).add(peer.getIpAddress());
-                                requestedFileOwners.get(username).add(String.valueOf(peer.getPort()));
-                                requestedFileOwners.get(username).add(peer.getUser().getUsername());
-                                requestedFileOwners.get(username).add(String.valueOf(peer.getUser().getCountFailures()));
-                                requestedFileOwners.get(username).add(String.valueOf(peer.getUser().getCountFailures()));
-                            } else {
-                                tracker.logoutPeer(peer.getTokenId());
+                for (SavedFile file : files.get(username)) {
+                    if (file.getFilename().equals(filename)) {
+                        // Make sure the peer is logged in
+                        isActive = false;
+                        for (LoggedInPeer peer : tracker.getLoggedInPeers()) {
+                            if (peer.getUser().getUsername().equals(username)) {
+                                // Send checkActive to peer
+                                isActive = checkActive(peer);
+                                
+                                // Amend the requestedFileOwners hashmap to include the active peer
+                                if (isActive) {
+                                    found = true;
+                                    requestedFileOwners.putIfAbsent(username, new ArrayList<>());
+                                    requestedFileOwners.get(username).add(peer.getIpAddress());
+                                    requestedFileOwners.get(username).add(peer.getPort());
+                                    requestedFileOwners.get(username).add(peer.getUser().getUsername());
+                                    requestedFileOwners.get(username).add(peer.getUser().getCountDownloads());
+                                    requestedFileOwners.get(username).add(peer.getUser().getCountFailures());
+                                    requestedFileOwners.get(username).add(peer.getUser().getFiles());
+                                } else {
+                                    tracker.logoutPeer(peer.getTokenId());
+                                }
+                                break;
                             }
-                            break;
                         }
                     }
                 }

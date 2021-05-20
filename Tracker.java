@@ -3,27 +3,23 @@ import java.net.Socket;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 import java.util.Random;
 import java.io.ObjectOutputStream;
 import java.io.ObjectInputStream;
 import java.io.IOException;
+import java.lang.Thread;
 
 public class Tracker {
     private ServerSocket server;
 
     // Data
-    private ExecutorService socketPool;
     private List<SavedPeer> savedPeers;
     private List<LoggedInPeer> loggedInPeers;
     private List<Integer> tokens;  // A list for holding all active token ids
     // This hashmap holds a peer's username with his files' names
-    private ConcurrentHashMap<String, List<String>> peerFiles;
+    private ConcurrentHashMap<String, List<SavedFile>> peerFiles;
 
     public Tracker() {
-        socketPool = Executors.newFixedThreadPool(10);
         savedPeers = new ArrayList<>();
         loggedInPeers = new ArrayList<>();
         tokens = new ArrayList<>();
@@ -43,19 +39,18 @@ public class Tracker {
                 Socket socket = server.accept();
 
                 // The tracker uses threads to process each client individualy
-                Runnable thread = new MessageHandler(socket, this);
-                socketPool.execute(thread);
+                Thread thread = new Thread(new MessageHandler(socket, this));
+                thread.start();
             }
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
-            socketPool.shutdown();
             System.exit(0);
         }
     }
 
     // Try to create a new peer. If the peer's username already exists return false.
-    public boolean addSavedPeer(String username, String password) {
+    public synchronized boolean addSavedPeer(String username, String password) {
         for (SavedPeer peer : savedPeers) {
             if (peer.getUsername().equals(username))
                 return false;
@@ -66,7 +61,7 @@ public class Tracker {
     }
 
     // Return the token_id if succefull. Otherwise, return 0
-    public int loginPeer(String username, String password, int port, Socket socket,
+    public synchronized int loginPeer(String username, String password, int port, Socket socket,
                         ObjectOutputStream output, ObjectInputStream input) {
         // Make sure the peer is registered
         boolean found = false;
@@ -90,11 +85,11 @@ public class Tracker {
         return token;
     }
 
-    public void addPeerFiles(String username, List<String> files) {
+    public synchronized void addPeerFiles(String username, List<SavedFile> files) {
         peerFiles.put(username, files);
     }
 
-    public void logoutPeer(int token) {
+    public synchronized void logoutPeer(int token) {
         tokens.remove(Integer.valueOf(token));
         for (LoggedInPeer peer : loggedInPeers) {
             if (peer.getTokenId() == (token)) {
@@ -116,11 +111,14 @@ public class Tracker {
     // Return a list containing all files available
     public List<String> getAllFiles() {
         List<String> allFiles = new ArrayList<>();
-        for (List<String> fileList : peerFiles.values())
-            allFiles.addAll(fileList);
-        
-        // Return distict files
-        return allFiles.stream().distinct().collect(Collectors.toList());
+        for (String username : peerFiles.keySet()) {
+            for (SavedFile file : peerFiles.get(username)) {
+                if (!allFiles.contains(file.getFilename()))
+                    allFiles.add(file.getFilename());
+            }
+        }
+
+        return allFiles;
     }
 
     private int getNewTokenId() {
@@ -155,16 +153,17 @@ public class Tracker {
         return loggedInPeers;
     }
 
-    public ConcurrentHashMap<String, List<String>> getPeerFiles() {
+    public ConcurrentHashMap<String, List<SavedFile>> getPeerFiles() {
         return new ConcurrentHashMap<>(peerFiles);
     }
 
-    public void setPeerFiles(ConcurrentHashMap<String, List<String>> peerFiles) {
+    public synchronized void setPeerFiles(ConcurrentHashMap<String, List<SavedFile>> peerFiles) {
         this.peerFiles = peerFiles;
     }
 
-    public void addPeerFile(String token, String filename) {
-        peerFiles.get(token).add(filename);
+    public synchronized void addPeerFile(String token, SavedFile file) {
+        peerFiles.putIfAbsent(token, new ArrayList<>());
+        peerFiles.get(token).add(file);
     }
 
     public static void main(String[] args) {
