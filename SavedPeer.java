@@ -56,6 +56,14 @@ public class SavedPeer {
         this.files = files;
     }
 
+    public SavedFile getFile(String filename) {
+        for (SavedFile file : files) {
+            if (file.getFilename().equals(filename))
+                return file;
+        }
+        return null;
+    }
+
     public void addFile(SavedFile file) {
         if (!files.contains(file))
             files.add(file);

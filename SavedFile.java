@@ -4,7 +4,7 @@ import java.util.ArrayList;
 
 public class SavedFile implements Serializable {
     private String filename;
-    private final boolean seeder;
+    private boolean seeder;
     private List<String> pieces;
 
     public SavedFile(String filename, boolean seeder) {
@@ -21,8 +21,16 @@ public class SavedFile implements Serializable {
         return seeder;
     }
 
+    public void setSeeder(boolean seeder) {
+        this.seeder = seeder;
+    }
+
     public List<String> getPieces() {
-        return pieces;
+        return new ArrayList<>(pieces);
+    }
+
+    public void setPieces(List<String> pieces) {
+        this.pieces = pieces;
     }
 
     public void addPiece(String piece) {

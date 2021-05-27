@@ -74,9 +74,7 @@ public class Tracker {
             }
         }
         
-        if (!found || !password.equals(user.getPassword())) {
-            return 0;
-        };
+        if (!found || !password.equals(user.getPassword())) return 0;
 
         // Create LoggedInPeer instance
         int token = getNewTokenId();
@@ -87,6 +85,16 @@ public class Tracker {
 
     public synchronized void addPeerFiles(String username, List<SavedFile> files) {
         peerFiles.put(username, files);
+
+        // Find the user and add the new files to his existing ones
+        for (SavedPeer user : savedPeers) {
+            if (user.getUsername().equals(username)) {
+                for (SavedFile file : files)
+                    user.addFile(file);
+                
+                break;
+            }
+        }
     }
 
     public synchronized void logoutPeer(int token) {

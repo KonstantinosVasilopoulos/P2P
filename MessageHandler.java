@@ -232,7 +232,7 @@ public class MessageHandler implements Runnable {
                                     requestedFileOwners.get(username).add(peer.getUser().getUsername());
                                     requestedFileOwners.get(username).add(peer.getUser().getCountDownloads());
                                     requestedFileOwners.get(username).add(peer.getUser().getCountFailures());
-                                    requestedFileOwners.get(username).add(peer.getUser().getFiles());
+                                    requestedFileOwners.get(username).add(peer.getUser().getFile(filename));
                                 } else {
                                     tracker.logoutPeer(peer.getTokenId());
                                 }
