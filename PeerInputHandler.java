@@ -46,7 +46,7 @@ public class PeerInputHandler implements Runnable {
                         break;
 
                     default:
-                        System.out.println("Peer: No such function: " + message + ".");
+                        System.out.println("Peer " + peer.getCredentials().get("username") + ": No such function: " + message + ".");
                 }
 
                 // Close socket and IO streams
@@ -81,7 +81,7 @@ public class PeerInputHandler implements Runnable {
             output.write(bytes, 0, bytes.length);
             output.flush();
             bis.close();
-            System.out.println("Peer " + peer.getCredentials().get("username") + ": Sent piece " + piece + ".");
+            System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Sent piece " + piece + ".");
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
@@ -98,7 +98,7 @@ public class PeerInputHandler implements Runnable {
             // Create a new request
             Request request = new Request(this, pieces);
             peer.addRequest(request);
-            System.out.println("Peer " + peer.getCredentials().get("username") + ": Created new request.");
+            System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Created new request.");
 
             // Start the timer
             peer.startTimer();

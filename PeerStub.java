@@ -14,7 +14,7 @@ public class PeerStub implements Runnable {
         try {
             // Listen for new messages
             ServerSocket server = new ServerSocket(peer.getPort());
-            System.out.println("Peer: Listening at port " + peer.getPort() + ".");
+            System.out.println("Peer " + peer.getCredentials().get("username") + ": Listening at port " + peer.getPort() + ".");
 
             Thread handler;
             while (true) {

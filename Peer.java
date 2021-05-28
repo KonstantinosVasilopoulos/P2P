@@ -17,7 +17,7 @@ import java.io.BufferedInputStream;
 import java.lang.Thread;
 import java.lang.Math;
 
-public class Peer {
+public class Peer implements Runnable {
     private Socket socket;
     private ObjectOutputStream output;
     private ObjectInputStream input;
@@ -65,7 +65,15 @@ public class Peer {
         stub = new PeerStub(this);
         Thread stubThread = new Thread(stub);
         stubThread.start();
-        
+    }
+
+    @Override
+    public void run() {
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         start();
     }
 
@@ -74,10 +82,10 @@ public class Peer {
         boolean success = register();
         if (success)
             login();
-        if (credentials.get("username").equals("testPeer")) {
+        if (credentials.get("username").equals("peer2")) {
             HashMap<String, List<Object>> fileDetails = details("file1.txt");
             for (int i = 0; i < 5; i++)
-                requestSeederPiece(fileDetails.get("testName"));
+                requestSeederPiece(fileDetails.get("peer1"));
 
             // FOR TESTING!
             for (SavedFile file : files) {
@@ -104,10 +112,8 @@ public class Peer {
                 // Send username and password
                 output.writeObject(credentials);
                 output.flush();
-
-                System.out.println("Peer: Registering...");
             } else {
-                System.out.println("Peer: Unable to register with username " + credentials.get("username") + ".");
+                System.out.println("Peer " + credentials.get("username") + ": Unable to register with username " + credentials.get("username") + ".");
                 return false;
             }
 
@@ -120,9 +126,9 @@ public class Peer {
             socket.close();
 
             if (response)
-                System.out.println("Peer: Registered with username " + credentials.get("username") + ".");
+                System.out.println("Peer " + credentials.get("username") + ": Registered with username " + credentials.get("username") + ".");
             else
-                System.out.println("Peer: Unable to register with username " + credentials.get("username") + ".");
+                System.out.println("Peer " + credentials.get("username") + ": Unable to register with username " + credentials.get("username") + ".");
 
             return response;
 
@@ -155,14 +161,14 @@ public class Peer {
                 output.flush();
                 
             } else {
-                System.out.println("Peer: Unable to login.");
+                System.out.println("Peer " + credentials.get("username") + ": Unable to login.");
                 return false;
             }
 
             // Wait for response
             int tokenId = input.readInt();
             if (tokenId == 0) {
-                System.out.println("Peer: Unable to login.");
+                System.out.println("Peer " + credentials.get("username") + ": Unable to login.");
                 return false;
             } else {
                 System.out.println("Peer " + tokenId +": Logged in.");
@@ -203,9 +209,9 @@ public class Peer {
             // Wait for response
             response = input.readBoolean();
             if (response)
-                System.out.println("Peer: Logout successful.");
+                System.out.println("Peer " + credentials.get("username") + ": Logout successful.");
             else
-                System.out.println("Peer: Unable to logout.");
+                System.out.println("Peer " + credentials.get("username") + ": Unable to logout.");
 
             output.close();
             input.close();
@@ -325,7 +331,7 @@ public class Peer {
             return false;
 
         } catch(ConnectException e) {
-            System.out.println("Peer: Peer at " + address + ":" + String.valueOf(port) + " is not active.");
+            System.out.println("Peer " + credentials.get("username") + ": Peer at " + address + ":" + String.valueOf(port) + " is not active.");
             return false;
         } catch (IOException ioe) {
             ioe.printStackTrace();
@@ -471,6 +477,8 @@ public class Peer {
     }
 
     public void requestSeederPiece(List<Object> details) {
+        if (details == null) return;
+
         // Exit if the given file doesn't belong to a seeder
         SavedFile file = (SavedFile) details.get(5);
         if (!file.getSeeder()) return;
@@ -545,7 +553,7 @@ public class Peer {
             }
             
             // Notify the user
-            System.out.println("Peer " + credentials.get("username") + ": Received piece " + piece + ".");
+            System.out.println("Peer " + credentials.get("token_id") + ": Received piece " + piece + ".");
             bos.close();
 
             // Notify the tracker about the new piece and the success
@@ -655,7 +663,7 @@ public class Peer {
         String piece = pieces.get(random.nextInt(pieces.size()));
 
         // Execute the request
-        System.out.println("Peer " + credentials.get("username") + ": Executing request for piece " + piece + ".");
+        System.out.println("Peer " + credentials.get("token_id") + ": Executing request for piece " + piece + ".");
         requests.remove(request);
         request.execute(piece);
         executingRequest = false;
