@@ -19,7 +19,6 @@ public class PeerTimer {
 
             // Choose and execute a request
             peer.chooseRequest();
-            peer.clearRequests();
 
         } catch (InterruptedException ie) {
             ie.printStackTrace();

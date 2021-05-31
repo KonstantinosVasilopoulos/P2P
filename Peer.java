@@ -49,7 +49,7 @@ public class Peer implements Runnable {
         new File(SHARED_DIR + "pieces/").mkdirs();
         files = new ArrayList<>();
         SavedFile file;
-        List<String> pieces;
+        ArrayList<String> pieces;
         for (String filename : new File(SHARED_DIR).list()) {
             if (!filename.endsWith("pieces")) {
                 // Partition the file and store it's pieces
@@ -69,29 +69,47 @@ public class Peer implements Runnable {
 
     @Override
     public void run() {
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        start();
-    }
-
-    public void start() {
         // ADD THE FUNCTIONS YOU WANT THE PEER TO EXECUTE HERE!
         boolean success = register();
         if (success)
             login();
-        if (credentials.get("username").equals("peer2")) {
-            HashMap<String, List<Object>> fileDetails = details("file1.txt");
-            for (int i = 0; i < 5; i++)
-                requestSeederPiece(fileDetails.get("peer1"));
 
-            // FOR TESTING!
-            for (SavedFile file : files) {
-                System.out.println(file.getFilename());
-                System.out.println(file.getPieces());
+        // Sleep for 300 ms
+        try {
+            Thread.sleep(300);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        // Download file1.txt if named peer4
+        // if (credentials.get("username").equals("peer4")) {
+        //     for (int i = 0; i < 5; i++)
+        //         requestPiece(details("file1.txt").get("peer1"));
+        //     assemble("file1.txt");
+
+        //     // Request a file that doesn't exist
+        //     HashMap<String, ArrayList<Object>> fileDetails = details("fff.txt");
+        //     if (fileDetails != null)
+        //         requestPiece(details("fff.txt").get("peer1"));
+        // }
+        
+        // Get all files that reside in the network
+        HashMap<String, ArrayList<Object>> fileDetails;
+        List<String> missingFiles = getMissingFiles();
+        SavedFile file;
+        while (!missingFiles.isEmpty()) {
+            fileDetails = details(select(missingFiles));
+
+            for (String username : fileDetails.keySet()) {
+                file = (SavedFile) fileDetails.get(username).get(5);
+                if (file.getSeeder()) {
+                    requestPiece(fileDetails.get(username));
+                    assemble(file.getFilename());
+                    break;
+                }
             }
+
+            missingFiles = getMissingFiles();
         }
     }
 
@@ -171,7 +189,7 @@ public class Peer implements Runnable {
                 System.out.println("Peer " + credentials.get("username") + ": Unable to login.");
                 return false;
             } else {
-                System.out.println("Peer " + tokenId +": Logged in.");
+                System.out.println("Peer " + credentials.get("username") +": Logged in.");
                 credentials.put("token_id", String.valueOf(tokenId));
             }
 
@@ -198,7 +216,7 @@ public class Peer implements Runnable {
             // Wait for true
             boolean response = input.readBoolean();
             if (!response) {
-                System.out.println("Peer " + credentials.get("token_id") + ": Unable to logout.");
+                System.out.println("Peer " + credentials.get("username") + ": Unable to logout.");
                 return false;
             }
 
@@ -233,16 +251,21 @@ public class Peer implements Runnable {
             // Send token_id
             output.writeUTF(credentials.get("token_id"));
 
-            // Send a list with all availables files
-            output.writeObject(files);
+            // Send all availables files
+            output.writeInt(files.size());
             output.flush();
+            
+            for (SavedFile file : files) {
+                output.writeObject(file);
+                output.flush();
+            }
 
             // Wait for true
             boolean response = input.readBoolean();
             if (response)
-                System.out.println("Peer " + credentials.get("token_id") + ": Successfully notified tracker.");
+                System.out.println("Peer " + credentials.get("username") + ": Successfully notified tracker.");
             else
-                System.out.println("Peer " + credentials.get("token_id") + ": Failed to notify tracker.");
+                System.out.println("Peer " + credentials.get("username") + ": Failed to notify tracker.");
 
             return response;
 
@@ -252,7 +275,7 @@ public class Peer implements Runnable {
         }
     }
 
-    public List<String> list() {
+    public ArrayList<String> list() {
         try {
             // Send list
             output.writeUTF("list");
@@ -261,8 +284,8 @@ public class Peer implements Runnable {
             // Wait for the list containing all available files
             Object response = input.readObject();
             @SuppressWarnings("unchecked")
-            List<String> allFiles = (List<String>) response;
-            System.out.println("Peer " + credentials.get("token_id") + ": Received file list from tracker.");
+            ArrayList<String> allFiles = (ArrayList<String>) response;
+            System.out.println("Peer " + credentials.get("username") + ": Received file list from tracker.");
             return allFiles;
 
         } catch (IOException ioe) {
@@ -276,7 +299,9 @@ public class Peer implements Runnable {
 
     // Lists' structure => {ip_address: String, port: Integer, user_name: String,
     // count_downloads: Integer, count_failures: Integer, saved_file: SavedFile}
-    public HashMap<String, List<Object>> details(String filename) {
+    public HashMap<String, ArrayList<Object>> details(String filename) {
+        if (filename == null) return null;
+
         try {
             // Send "details" and the filename
             output.writeUTF("details");
@@ -286,15 +311,15 @@ public class Peer implements Runnable {
             // Response about the existance of the requested file
             boolean exists = input.readBoolean();
             if (!exists) {
-                System.out.println("Peer " + credentials.get("token_id") + ": File " + filename + " doesn't exist.");
+                System.out.println("Peer " + credentials.get("username") + ": File " + filename + " doesn't exist.");
                 return null;
             }
 
             // Wait for the list with the requested file's details
             Object response = input.readObject();
             @SuppressWarnings("unchecked")
-            HashMap<String, List<Object>> fileDetails = (HashMap<String, List<Object>>) response;
-            System.out.println("Peer " + credentials.get("token_id") + ": Received details for file " + filename + ".");
+            HashMap<String, ArrayList<Object>> fileDetails = (HashMap<String, ArrayList<Object>>) response;
+            System.out.println("Peer " + credentials.get("username") + ": Received details for file " + filename + ".");
             return fileDetails;
 
         } catch (IOException ioe) {
@@ -325,7 +350,7 @@ public class Peer implements Runnable {
             otherPeer.close();
 
             if (response) {
-                System.out.println("Peer " + credentials.get("token_id") + ": Peer at " + address + ":" + String.valueOf(port) + " is active.");
+                System.out.println("Peer " + credentials.get("username") + ": Peer at " + address + ":" + String.valueOf(port) + " is active.");
                 return true;
             }
             return false;
@@ -339,13 +364,13 @@ public class Peer implements Runnable {
         }
     }
 
-    public void simpleDownload(String filename, HashMap<String, List<Object>> fileDetails) {
+    public void simpleDownload(String filename, HashMap<String, ArrayList<Object>> fileDetails) {
         // Exit if no the requested file isn't owned by any peers
         if (fileDetails == null) return;
 
         // Find the best peer
-        List<Object> peerInfo;
-        List<Double> scores = new ArrayList<>();
+        ArrayList<Object> peerInfo;
+        ArrayList<Double> scores = new ArrayList<>();
         double score;
         long start, end, responseTime;
         boolean isActive, found = false;
@@ -410,7 +435,7 @@ public class Peer implements Runnable {
                                     bos.write(bytes, 0, bytesRead);
                                 
                                 bos.close();
-                                System.out.println("Peer " + credentials.get("token_id") +": Received file " + filename + " from peer " + peerInfo.get(2) + ".");
+                                System.out.println("Peer " + credentials.get("username") +": Received file " + filename + " from peer " + peerInfo.get(2) + ".");
                             }
 
                             // Notify the tracker about the new file
@@ -433,7 +458,7 @@ public class Peer implements Runnable {
                 if (success) break;
             }
         } else {
-            System.out.println("Peer " + credentials.get("token_id") + ": Failed to download " + filename + ".");
+            System.out.println("Peer " + credentials.get("username") + ": Failed to download " + filename + ".");
         }
     }
 
@@ -445,52 +470,35 @@ public class Peer implements Runnable {
             output.writeBoolean(success);
             output.writeUTF(username);
             output.flush();
-            System.out.println("Peer " + credentials.get("token_id") + ": Notified tracker for download status.");
+            System.out.println("Peer " + credentials.get("username") + ": Notified tracker for download status.");
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
     }
 
-    public SavedFile select() {
-        // Get all availabe files and remove those
-        // that this peer already has
-        List<String> allFiles = list();
-        List<String> toRemove = new ArrayList<>();
-        for (String filename : allFiles) {
-            for (SavedFile file : files) {
-                if (filename.equals(file.getFilename())) {
-                    toRemove.add(filename);
-                    break;
-                }
-            }
-        }
-        allFiles.removeAll(toRemove);
+    public String select(List<String> missingFiles) {
+        if (missingFiles.isEmpty() || missingFiles == null) return null;
 
-        // Exit if this peer has all files
-        if (allFiles.isEmpty())
-            return null;
-
-        // Choose one file in random
+        // Choose one file at random
         Random random = new Random(System.currentTimeMillis());
-        return new SavedFile(allFiles.get(random.nextInt(allFiles.size())), false);
+        return missingFiles.get(random.nextInt(missingFiles.size()));
     }
 
-    public void requestSeederPiece(List<Object> details) {
+    public void requestPiece(ArrayList<Object> details) {
         if (details == null) return;
 
-        // Exit if the given file doesn't belong to a seeder
-        SavedFile file = (SavedFile) details.get(5);
-        if (!file.getSeeder()) return;
-
         // Find the pieces to be requested
-        List<String> pieces = file.getPieces();
+        SavedFile file = (SavedFile) details.get(5);
+        ArrayList<String> pieces = file.getPieces();
         for (SavedFile f : files) {
             if (f.getFilename().equals(file.getFilename())) {
                 pieces.removeAll(f.getPieces());
                 break;
             }
         }
+
+        if (pieces.isEmpty()) return;
 
         String username = null;
         try {
@@ -499,8 +507,13 @@ public class Peer implements Runnable {
             ObjectOutputStream otherOutput = new ObjectOutputStream(otherPeer.getOutputStream());
             ObjectInputStream otherInput = new ObjectInputStream(otherPeer.getInputStream());
 
-            // Send "seederServe"
-            otherOutput.writeUTF("seederServe");
+            // Send "seederServe" or "collaborativeDownload"
+            String function = file.getSeeder() ? "seederServe" : "collaborativeDownload";
+            otherOutput.writeUTF(function);
+            otherOutput.flush();
+
+            // Send the filename
+            otherOutput.writeUTF(file.getFilename());
             otherOutput.flush();
 
             // Send the list containing the pieces this peer wants
@@ -508,9 +521,12 @@ public class Peer implements Runnable {
             otherOutput.flush();
 
             // Wait for an answer
-            while (true) {
-                if (otherInput.available() == 0) continue;
-                break;
+            while (otherInput.available() == 0) {
+                try {
+                    Thread.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
 
             // The answer indicates whether this peer was chosen
@@ -534,6 +550,11 @@ public class Peer implements Runnable {
             while ((bytesRead = otherInput.read(bytes, 0, bytes.length)) != -1)
                 bos.write(bytes, 0, bytesRead);
 
+            // Disconnect
+            otherOutput.close();
+            otherInput.close();
+            otherPeer.close();
+
             // Create a new SavedFile instance if needed
             synchronized (this) {
                 boolean found = false;
@@ -553,17 +574,12 @@ public class Peer implements Runnable {
             }
             
             // Notify the user
-            System.out.println("Peer " + credentials.get("token_id") + ": Received piece " + piece + ".");
+            System.out.println("Peer " + credentials.get("username") + ": Received piece " + piece + ".");
             bos.close();
 
             // Notify the tracker about the new piece and the success
             notifyFiles();
             notifyDownload(true, username);
-
-            // Disconnect
-            otherOutput.close();
-            otherInput.close();
-            otherPeer.close();
             
         } catch (IOException ioe) {
             ioe.printStackTrace();
@@ -579,8 +595,8 @@ public class Peer implements Runnable {
     }
 
     // Split a file into 1 MB pieces
-    private List<String> partition(SavedFile file) {
-        List<String> pieceNames = new ArrayList<>();
+    private ArrayList<String> partition(SavedFile file) {
+        ArrayList<String> pieceNames = new ArrayList<>();
         try {
             // Do not partition files smaller than 1 MB
             File wholeFile = new File(SHARED_DIR + file.getFilename());
@@ -634,44 +650,176 @@ public class Peer implements Runnable {
         return filename + "_" + count;
     }
 
-    public void addRequest(Request request) {
-        // Make sure requests aren't being executed right now
-        while (true) {
-            if (executingRequest) continue;
-            break;
-        }
+    private void clearRequests() {
+        for (Request request : requests)
+            request.cancel();
 
+        requests.clear();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assemble(String filename) {
+        try {
+            // Send "assemble"
+            output.writeUTF("assemble");
+            output.flush();
+
+            // Send the filename
+            output.writeUTF(filename);
+            output.flush();
+
+            // Wait for the pieces
+            Object response = input.readObject();
+            ArrayList<String> pieces = (ArrayList<String>) response;
+
+            // Find if this peer has all the pieces
+            for (SavedFile file : files) {
+                if (listContainSameItems(pieces, file.getPieces())) {
+                    // Assemble the file
+                    BufferedOutputStream bos = new BufferedOutputStream(
+                        new FileOutputStream(new File(SHARED_DIR, filename))
+                    );
+                    BufferedInputStream bis;
+                    byte[] bytes = new byte[1048576];  // 1 MB
+                    File piece;
+                    for (int i = 0; i < pieces.size(); i++) {
+                        // Read the piece's bytes
+                        piece = new File(SHARED_DIR + "pieces/", getPieceName(filename, i));
+                        if (piece.exists()) {
+                            bis = new BufferedInputStream(new FileInputStream(piece));
+                            bis.read(bytes, 0, bytes.length);
+                            
+                            // Write the bytes
+                            bos.write(bytes, 0, bytes.length);
+                            bis.close();
+                        }
+                    }
+
+                    // This peer is now a seeder for this file
+                    file.setSeeder(true);
+                    notifyFiles();
+
+                    // Notify the user about the assembly
+                    System.out.println("Peer " + credentials.get("username") + ": Assembled file " + filename + ".");
+                    bos.close();
+                    break;
+                }
+            }
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        } catch (ClassNotFoundException cnfe) {
+            cnfe.printStackTrace();
+        }
+    }
+
+    public synchronized void addRequest(Request request) {
         if (!requests.contains(request))
             requests.add(request);
     }
 
-    public void clearRequests() {
-        requests.clear();
-    }
-
     // Choose and execute one request
-    public void chooseRequest() {
+    public synchronized void chooseRequest() {
         if (requests.isEmpty()) return;
+
+        // Make sure a request isn't being executed right now
+        while (executingRequest) {
+            try {
+                Thread.sleep(5);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
         executingRequest = true;
 
-        // Choose one request at random
+        // Prioritze seeder requests
+        boolean seed = false;
+        for (Request r : requests) {
+            if (r.isSeeder()) {
+                removeNonSeederRequests();
+                seed = true;
+                break;
+            }
+        }
+
         Random random = new Random(System.currentTimeMillis());
-        Request request = requests.get(random.nextInt(requests.size()));
+        Request request;
+        List<String> pieces;
+        String piece;
+        if (seed) {  // Seeder serve
+            // Choose one request at random
+            request = requests.get(random.nextInt(requests.size()));
 
-        // Choose one piece at random
-        List<String> pieces = request.getPieces();
-        String piece = pieces.get(random.nextInt(pieces.size()));
+            // Choose one piece at random
+            pieces = request.getPieces();
+            piece = pieces.get(random.nextInt(pieces.size()));
 
-        // Execute the request
-        System.out.println("Peer " + credentials.get("token_id") + ": Executing request for piece " + piece + ".");
-        requests.remove(request);
-        request.execute(piece);
+            // Execute the request
+            System.out.println("Peer " + credentials.get("username") + ": Executing request for piece " + piece + ".");
+            requests.remove(request);
+            clearRequests();
+            request.execute(piece);
+
+        } else {  // Collaborative download
+            // Case A
+            if (requests.size() == 1) {
+                // Get the first and only request and choose one piece at random
+                request = requests.get(0);
+                pieces = request.getPieces();
+                piece = pieces.get(random.nextInt(pieces.size()));
+
+                // Execute the request
+                System.out.println("Peer " + credentials.get("username") + ": Executing request for piece " + piece + ".");
+                requests.remove(request);
+                clearRequests();
+                request.execute(piece);
+            }
+        }
+
         executingRequest = false;
+    }
+
+    // Remove all non-seeder requests from the list containing all requests
+    private void removeNonSeederRequests() {
+        List<Request> toRemove = new ArrayList<>();
+        for (Request request: requests) {
+            if (!request.isSeeder())
+                toRemove.add(request);
+        }
+
+        requests.removeAll(toRemove);
+    }
+
+    private List<String> getMissingFiles() {
+        ArrayList<String> allFiles = list();
+
+        // Find the files currently owned
+        List<String> ownedFiles = new ArrayList<>();
+        for (SavedFile file : files) {
+            if (file.getSeeder())
+                ownedFiles.add(file.getFilename());
+        }
+
+        allFiles.removeAll(ownedFiles);
+        return allFiles;
+    }
+
+    private boolean listContainSameItems(List<String> firstList, List<String> secondList) {
+        for (String item : firstList) {
+            if (!secondList.contains(item))
+                return false;
+        }
+        return true;
     }
 
     // Getters
     public ConcurrentHashMap<String, String> getCredentials() {
         return new ConcurrentHashMap<>(credentials);
+    }
+
+    public List<SavedFile> getFiles () {
+        return files;
     }
 
     public List<Request> getRequests() {

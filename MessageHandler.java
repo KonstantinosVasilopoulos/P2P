@@ -66,6 +66,10 @@ public class MessageHandler implements Runnable {
                         handleNotifyDownload();
                         break;
 
+                    case "assemble":
+                        replyAssemble();
+                        break;
+
                     default:
                         System.out.println("Tracker: No such function: " + message +".");
                 }
@@ -126,7 +130,7 @@ public class MessageHandler implements Runnable {
             // Wait for inform
             response = input.readObject();
             @SuppressWarnings("unchecked")
-            List<SavedFile> files = (ArrayList<SavedFile>) response;
+            ArrayList<SavedFile> files = (ArrayList<SavedFile>) response;
             tracker.addPeerFiles(credentials.get("username"), files);
 
             // Send true
@@ -176,9 +180,15 @@ public class MessageHandler implements Runnable {
             String username = tracker.getUsername(token);
 
             // Get the peer's files
-            Object response = input.readObject();
-            @SuppressWarnings("unchecked")
-            List<SavedFile> files = (ArrayList<SavedFile>) response;
+            int filesNumber = input.readInt();
+
+            ArrayList<SavedFile> files = new ArrayList<>();
+            Object response;
+            for (int i = 0; i < filesNumber; i++) {
+                response = input.readObject();
+                files.add((SavedFile) response);
+            }
+
             tracker.addPeerFiles(username, files);
 
             // Send success message
@@ -211,8 +221,8 @@ public class MessageHandler implements Runnable {
 
             // Find whether the file exists
             boolean isActive, found = false;
-            HashMap<String, List<SavedFile>> files = new HashMap<>(tracker.getPeerFiles());
-            HashMap<String, List<Object>> requestedFileOwners = new HashMap<>();
+            HashMap<String, ArrayList<SavedFile>> files = new HashMap<>(tracker.getPeerFiles());
+            HashMap<String, ArrayList<Object>> requestedFileOwners = new HashMap<>();
             for (String username : files.keySet()) {
                 for (SavedFile file : files.get(username)) {
                     if (file.getFilename().equals(filename)) {
@@ -316,6 +326,31 @@ public class MessageHandler implements Runnable {
                 }
             }
             
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+    }
+
+    private void replyAssemble() {
+        try {
+            // Receive the filename
+            String filename = input.readUTF();
+
+            // Find the pieces for the given filename
+            ArrayList<String> pieces = null;
+            for (String username : tracker.getPeerFiles().keySet()) {
+                for (SavedFile file : tracker.getPeerFiles().get(username)) {
+                    if (filename.equals(file.getFilename()) && file.getSeeder()) {
+                        pieces = file.getPieces();
+                        break;
+                    }
+                }
+            }
+
+            // Send the pieces
+            output.writeObject(pieces);
+            output.flush();
+
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }

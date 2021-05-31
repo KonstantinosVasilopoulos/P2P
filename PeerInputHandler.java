@@ -42,21 +42,25 @@ public class PeerInputHandler implements Runnable {
                         break;
 
                     case "seederServe":
-                        seederServe();
+                        processRequest(true);
+                        break;
+
+                    case "collaborativeDownload":
+                        processRequest(false);
                         break;
 
                     default:
                         System.out.println("Peer " + peer.getCredentials().get("username") + ": No such function: " + message + ".");
                 }
-
-                // Close socket and IO streams
-                output.close();
-                input.close();
-                socket.close();
             }
 
+            // Close socket and IO streams
+            output.close();
+            input.close();
+            socket.close();
+
         } catch (IOException ioe) {
-            ioe.printStackTrace();
+            
         }
     }
 
@@ -81,24 +85,51 @@ public class PeerInputHandler implements Runnable {
             output.write(bytes, 0, bytes.length);
             output.flush();
             bis.close();
-            System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Sent piece " + piece + ".");
+            System.out.println("Peer " + peer.getCredentials().get("username") + ": Sent piece " + piece + ".");
+
+            // Disconnect
+            output.close();
+            input.close();
+            socket.close();
 
         } catch (IOException ioe) {
             ioe.printStackTrace();
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void seederServe() {
+    public void cancelRequest() {
         try {
+            // Send false
+            output.writeBoolean(false);
+            output.flush();
+
+            // Disconnect
+            output.close();
+            input.close();
+            socket.close();
+
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+        }
+    }
+
+    // The variable called function determines whether seeder-serve
+    // or collaborative-download will be executed.
+    // True translates to seeder-serve
+    @SuppressWarnings("unchecked")
+    private void processRequest(boolean function) {
+        try {
+            // Get the filename
+            String filename = input.readUTF();
+
             // Get the list with the requested pieces
             Object response = input.readObject();
-            List<String> pieces = (ArrayList<String>) response;
+            ArrayList<String> pieces = (ArrayList<String>) response;
 
             // Create a new request
-            Request request = new Request(this, pieces);
+            Request request = new Request(this, peer.getCredentials().get("username"), filename, pieces, function);
             peer.addRequest(request);
-            System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Created new request.");
+            System.out.println("Peer " + peer.getCredentials().get("username") + ": Created new request.");
 
             // Start the timer
             peer.startTimer();
@@ -115,7 +146,7 @@ public class PeerInputHandler implements Runnable {
             // Send true
             output.writeBoolean(true);
             output.flush();
-            System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Active.");
+            System.out.println("Peer " + peer.getCredentials().get("username") + ": Active.");
         
         } catch (IOException ioe) {
             ioe.printStackTrace();
@@ -137,7 +168,7 @@ public class PeerInputHandler implements Runnable {
                 // Check if the file is too large to be send
                 long fileLength = requestedFile.length();
                 if (fileLength > Integer.MAX_VALUE) {
-                    System.out.println("Peer " + peer.getCredentials().get("token_id") + ": File is too big.");
+                    System.out.println("Peer " + peer.getCredentials().get("username") + ": File is too big.");
 
                     // Send false
                     output.writeBoolean(false);
@@ -151,7 +182,7 @@ public class PeerInputHandler implements Runnable {
                 output.write(bytes, 0, bytes.length);
                 output.flush();
                 bis.close();
-                System.out.println("Peer " + peer.getCredentials().get("token_id") + ": Sent file " + requestedFile.getName() + ".");
+                System.out.println("Peer " + peer.getCredentials().get("username") + ": Sent file " + requestedFile.getName() + ".");
 
             } else {
                 // Send false

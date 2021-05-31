@@ -17,7 +17,7 @@ public class Tracker {
     private List<LoggedInPeer> loggedInPeers;
     private List<Integer> tokens;  // A list for holding all active token ids
     // This hashmap holds a peer's username with his files' names
-    private ConcurrentHashMap<String, List<SavedFile>> peerFiles;
+    private ConcurrentHashMap<String, ArrayList<SavedFile>> peerFiles;
 
     public Tracker() {
         savedPeers = new ArrayList<>();
@@ -83,7 +83,7 @@ public class Tracker {
         return token;
     }
 
-    public synchronized void addPeerFiles(String username, List<SavedFile> files) {
+    public synchronized void addPeerFiles(String username, ArrayList<SavedFile> files) {
         peerFiles.put(username, files);
 
         // Find the user and add the new files to his existing ones
@@ -161,11 +161,11 @@ public class Tracker {
         return loggedInPeers;
     }
 
-    public ConcurrentHashMap<String, List<SavedFile>> getPeerFiles() {
+    public ConcurrentHashMap<String, ArrayList<SavedFile>> getPeerFiles() {
         return new ConcurrentHashMap<>(peerFiles);
     }
 
-    public synchronized void setPeerFiles(ConcurrentHashMap<String, List<SavedFile>> peerFiles) {
+    public synchronized void setPeerFiles(ConcurrentHashMap<String, ArrayList<SavedFile>> peerFiles) {
         this.peerFiles = peerFiles;
     }
 
