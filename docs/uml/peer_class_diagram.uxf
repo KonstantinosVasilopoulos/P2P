@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>200</x>
+      <y>260</y>
+      <w>410</w>
+      <h>480</h>
+    </coordinates>
+    <panel_attributes>*Peer*
+--
+- socket: Socket
+- output: ObjectOutputStream
+- input: ObjectInputStream
+- requests: List&lt;Requests&gt;
+- executingRequests: volatile boolean
+- PORT: int
+- SHARED_DIR: String
+- credentials: ConcurrentHashMap&lt;String, String&gt;
+- files: List&lt;SavedFile&gt;
+--
++ run(): void
++ register(): boolean
++ login(): boolean
++ logout(): boolean
++ notifyFiles(): boolean
++ simpleDownload(filename: String, fileDetails: ...): void
++ notifyDownload(success: boolean, username: String): void
++ select(missingFiles: List&lt;String&gt;): String
++ requestPiece(details: ArrayList&lt;Object&gt;)
++ startTimer(): void
++ partition(file: SavedFile): ArrayList&lt;String&gt;
+- getPieceName(filename: String, count: int): String
+- clearRequests(): void
+- assemble(filename: String): void
+- chooseRequest(): void
++ getters &amp; setters</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>730</x>
+      <y>260</y>
+      <w>160</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>*PeerStub*
+--
+--
++ run(): void</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>560</x>
+      <y>100</y>
+      <w>100</w>
+      <h>50</h>
+    </coordinates>
+    <panel_attributes>&lt;&lt;interface&gt;&gt;
+*Runnable*</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>400</x>
+      <y>140</y>
+      <w>210</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-</panel_attributes>
+    <additional_attributes>190.0;10.0;190.0;70.0;10.0;70.0;10.0;120.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>620</x>
+      <y>140</y>
+      <w>210</w>
+      <h>140</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;10.0;70.0;190.0;70.0;190.0;120.0</additional_attributes>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>600</x>
+      <y>300</y>
+      <w>150</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;130.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>730</x>
+      <y>400</y>
+      <w>160</w>
+      <h>100</h>
+    </coordinates>
+    <panel_attributes>*PeerTimer*
+--
+- operational: boolean
+--
++ start(): void</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>600</x>
+      <y>440</y>
+      <w>150</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m2=1</panel_attributes>
+    <additional_attributes>10.0;10.0;130.0;10.0</additional_attributes>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>930</x>
+      <y>260</y>
+      <w>280</w>
+      <h>210</h>
+    </coordinates>
+    <panel_attributes>*PeerInputHandler*
+--
+- socket: Socket
+- output: ObjectOutputStream
+- input: ObjectInputStream
+--
++ run(): void
++ sendPiece(piece: String): void
++ cancelRequest(): void
+- processRequest(function: boolean): void
+- replyCheckActive(): void
+- handleSimpleDownload(): void</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>650</x>
+      <y>120</y>
+      <w>440</w>
+      <h>160</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;-</panel_attributes>
+    <additional_attributes>10.0;10.0;420.0;10.0;420.0;140.0</additional_attributes>
+  </element>
+</diagram>

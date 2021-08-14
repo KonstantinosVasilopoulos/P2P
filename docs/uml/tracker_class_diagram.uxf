@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<diagram program="umlet" version="14.3.0">
+  <zoom_level>10</zoom_level>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>280</x>
+      <y>350</y>
+      <w>470</w>
+      <h>240</h>
+    </coordinates>
+    <panel_attributes>*Tracker*
+--
+- server: ServerSocket
+- savedPeers: List&lt;SavedPeer&gt;
+- loggedInPeers: List&lt;LoggedInPeer&gt;
+- peerFiles: ConcurrentHashMap&lt;String, ArrayList&lt;SavedFile&gt; &gt;
+--
+- start(): void
++ addSavedPeer(username: String, password: String): boolean
++ loginPeer(...): int
++ logoutPeer(token: int): void
++ addPeerFiles(username: String, files: ArrayList&lt;SavedFile&gt;): void
+- getNewTokenId(): int
++ getters &amp; setters
+_+ main(args: String[]): void_</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>UMLClass</id>
+    <coordinates>
+      <x>920</x>
+      <y>350</y>
+      <w>410</w>
+      <h>250</h>
+    </coordinates>
+    <panel_attributes>*MessageHandler*
+--
+- socket: Socket
+- output: ObjectOutputStream
+- input: ObjectInputStream
+--
++ run(): void
+- handleRegister(): void
+- handleLogin(): void
+- handleLogout(): void
+- handleNotify(): void
+- replyList(): void
+- replyDetails(): void
+- checkActive(otherPeer: LoggedInPeer): boolean
+- handleNotifyDownload(): void
+- replyAssemble(): void</panel_attributes>
+    <additional_attributes/>
+  </element>
+  <element>
+    <id>Relation</id>
+    <coordinates>
+      <x>740</x>
+      <y>470</y>
+      <w>200</w>
+      <h>40</h>
+    </coordinates>
+    <panel_attributes>lt=&lt;&lt;&lt;&lt;&lt;-
+m2=0..*</panel_attributes>
+    <additional_attributes>10.0;10.0;180.0;10.0</additional_attributes>
+  </element>
+</diagram>
